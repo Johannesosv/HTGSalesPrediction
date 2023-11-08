@@ -1,0 +1,2 @@
+@echo off
+start cmd /K "py -m venv env && .\env\Scripts\activate.bat && pip install xgboost && pip install pandas && pip install pyodbc && pip install requests && pip install workalendar && pip install sqlalchemy"

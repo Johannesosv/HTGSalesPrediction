@@ -4,22 +4,29 @@ import xgboost as xgb
 import numpy as np
 import pandas as pd
 import datetime
+import sys
 import pyodbc
 from sqlalchemy import event, create_engine, text
 import urllib.parse
 import pandas as pd
-import sys
+import requests
+import pickle
+import os
+from workalendar.europe import Sweden
 
+
+# %%
 # Check if the correct number of arguments is provided
 if len(sys.argv) != 2:
     config_path = "C:\\Users\\Jojje\\Desktop\\Project_Desktop\\sql config.txt"
-
+else:
+    config_path = sys.argv[1]
 # Access the argument
-config_path = sys.argv[1]
+
+current_path = os.getcwd()
 
 # %%
 #get swedish holidays
-from workalendar.europe import Sweden
 cal = Sweden()
 #get min and max years from current year
 min_year = datetime.datetime.now().year
@@ -33,6 +40,7 @@ for year in range(min_year,max_year+1):
 
 
 #make df of holidays
+holidays_df = pd.DataFrame()
 holidays_df = pd.concat([pd.DataFrame(holiday) for holiday in holidays], ignore_index=True)
 
 
@@ -80,25 +88,7 @@ date_df['IsWeekend'] = date_df['date'].dt.dayofweek.apply(lambda x: 1 if x > 4 e
 #make date to pandas datetime
 date_df['date'] = pd.to_datetime(date_df['date'], errors='coerce')
 
-# %% [markdown]
-# 
-# pmean
-# [0.0]
-# kg/m2/h
-# t
-# [-3.5]
-# Cel
-# vis
-# [3.5]
-# km
-# ws
-# [1.4]
-# m/s
-# 
-
 # %%
-import requests
-
 #around Älvsbyn
 lon="21"
 lat="66.6"
@@ -132,6 +122,7 @@ for j in range(len(data["timeSeries"])):
             #add the df to the main df
             df = pd.concat([df, df_temp], ignore_index=True)
 
+
 #make the datetime column to pandas datetime
 df["ObsDate"] = pd.to_datetime(df["ObsDate"], errors='coerce')
 
@@ -159,10 +150,16 @@ df['date'] = pd.to_datetime(df['date'], errors='coerce')
 #merge the df
 date_df = date_df.merge(df, on="date", how="left")
 
+#convert theweek and theyear to int64
+date_df['TheWeek'] = date_df['TheWeek'].astype('int64')
+date_df['TheYear'] = date_df['TheYear'].astype('int64')
+
 # %%
-#load model from Other/xg_reg.pickle.dat
-import pickle
-xg_reg = pickle.load(open("Other/xg_reg.pickle.dat", "rb"))
+#set path to pickle file
+path = current_path + "\\Other\\xg_reg.pickle.dat"
+
+#load model from 
+xg_reg = pickle.load(open(path, "rb"))
 
 #make prediction
 preds = xg_reg.predict(date_df[['TheWeek',"TheYear","IsWeekend","nederbörd","temperatur_avg","vindhastighet_avg","sikt_avg","days_to_holiday"]])
@@ -200,8 +197,6 @@ sql_username = sql_config["sql_username"]
 sql_password = sql_config["sql_password"]
 
 # %%
-
-
 #-------    Read from Pandas DF into SQL Table    -------#
 #create engine
 connection_string = f"mssql+pyodbc://{sql_username}:{sql_password}@{server},{port}/{database}?driver=SQL+Server+Native+Client+11.0"
