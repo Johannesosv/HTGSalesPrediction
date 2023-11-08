@@ -1,0 +1,4 @@
+sql_username = A
+sql_password = P
+sql_server = 25.58.16.230
+sql_port = 1434
