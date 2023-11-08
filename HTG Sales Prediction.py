@@ -4,10 +4,18 @@ import xgboost as xgb
 import numpy as np
 import pandas as pd
 import datetime
+import pyodbc
+from sqlalchemy import event, create_engine, text
+import urllib.parse
+import pandas as pd
+import sys
 
-# %%
-#configure path
-config_path = "C:\\Users\\Jojje\\Desktop\\Project_Desktop\\sql config.txt"
+# Check if the correct number of arguments is provided
+if len(sys.argv) != 2:
+    config_path = "C:\\Users\\Jojje\\Desktop\\Project_Desktop\\sql config.txt"
+
+# Access the argument
+config_path = sys.argv[1]
 
 # %%
 #get swedish holidays
@@ -25,9 +33,8 @@ for year in range(min_year,max_year+1):
 
 
 #make df of holidays
-holidays_df = pd.DataFrame()
-for i in range(len(holidays)):
-    holidays_df = holidays_df.append(pd.DataFrame(holidays[i]))
+holidays_df = pd.concat([pd.DataFrame(holiday) for holiday in holidays], ignore_index=True)
+
 
 #rename columns
 holidays_df = holidays_df.rename(columns={0:'date',1:'holiday'})
@@ -66,8 +73,8 @@ date_df['days_to_holiday'] = date_df.apply(lambda row: row['days_to_prev_holiday
 date_df = date_df.drop(['prev_holiday','next_holiday','days_to_prev_holiday','days_to_next_holiday'], axis=1)
 
 #add columns
-date_df['TheWeek'] = date_df['date'].dt.week
-date_df['TheYear'] = date_df['date'].dt.year
+date_df['TheWeek'] = date_df['date'].dt.isocalendar().week
+date_df['TheYear'] = date_df['date'].dt.isocalendar().year
 date_df['IsWeekend'] = date_df['date'].dt.dayofweek.apply(lambda x: 1 if x > 4 else 0)
 
 #make date to pandas datetime
@@ -123,7 +130,7 @@ for j in range(len(data["timeSeries"])):
             #add the datetime column
             df_temp["ObsDate"] = obs_date
             #add the df to the main df
-            df = df.append(df_temp, ignore_index=True)
+            df = pd.concat([df, df_temp], ignore_index=True)
 
 #make the datetime column to pandas datetime
 df["ObsDate"] = pd.to_datetime(df["ObsDate"], errors='coerce')
@@ -193,10 +200,6 @@ sql_username = sql_config["sql_username"]
 sql_password = sql_config["sql_password"]
 
 # %%
-import pyodbc
-from sqlalchemy import event, create_engine, text
-import urllib.parse
-import pandas as pd
 
 
 #-------    Read from Pandas DF into SQL Table    -------#
