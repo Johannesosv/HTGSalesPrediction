@@ -51,8 +51,6 @@ holidays_df = holidays_df.rename(columns={0:'date',1:'holiday'})
 #make date to pandas datetime
 holidays_df['date'] = pd.to_datetime(holidays_df['date'], errors='coerce')
 
-
-
 # %%
 #get todays date and make prediction for the next 7 days
 todays_date = datetime.datetime.now().date()
@@ -68,7 +66,7 @@ date_df = date_df.rename(columns={0:'date'})
 #make date to pandas datetime
 date_df['date'] = pd.to_datetime(date_df['date'], errors='coerce')
 
-#add the date of the previous holiday and the next holiday to date_df
+#add the date of the previous holiday and the next holiday to SQL_df
 date_df['prev_holiday'] = date_df['date'].apply(lambda x: holidays_df[holidays_df['date']<x]['date'].max())
 date_df['next_holiday'] = date_df['date'].apply(lambda x: holidays_df[holidays_df['date']>x]['date'].min())
 
@@ -89,12 +87,6 @@ date_df['IsWeekend'] = date_df['date'].dt.dayofweek.apply(lambda x: 1 if x > 4 e
 
 #make date to pandas datetime
 date_df['date'] = pd.to_datetime(date_df['date'], errors='coerce')
-
-#get the name of the weekday
-date_df['TheDayName'] = date_df['date'].dt.day_name()
-
-#get the day of the month
-date_df['TheDay'] = date_df['date'].dt.day
 
 # %%
 #around Älvsbyn
@@ -163,46 +155,6 @@ date_df['TheWeek'] = date_df['TheWeek'].astype('int64')
 date_df['TheYear'] = date_df['TheYear'].astype('int64')
 
 # %%
-#insert average temperature per month manually
-data_tmp = {'Month': ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
-        'Avg Temperature': [-11, -8, -1, 5, 12, 18, 20, 18, 12, 3, -3, -8]}
-
-average_temp_df = pd.DataFrame(data_tmp)
-
-#insert average temperature per month into SQL_df
-date_df = pd.merge(date_df, average_temp_df, left_on=date_df['date'].dt.month_name(), right_on=average_temp_df['Month'], how='left')
-
-# %%
-#Make cool varables
-
-#make days to holiday categorical variable
-date_df['högtid_cat'] = date_df['days_to_holiday'].apply(lambda x: 'holiday' if x == 0 else 'before_holiday' if x > 0 and x<4 else 'after_holiday' if x < 0 and x>-4 else 'normal_day').astype('category').cat.as_ordered()
-
-#make sikt a categorical variable
-date_df['sikt_cat'] = date_df['sikt_avg'].apply(lambda x: 'Bra Sikt' if x>=25000 else 'Dålig Sikt').astype('category').cat.as_ordered()
-
-#make wind speed a categorical variable
-date_df['vindhastighet_cat'] = date_df['vindhastighet_avg'].apply(lambda x: 'Stark vind' if x>=4 else 'Svag vind').astype('category').cat.as_ordered()
-
-#make nederbörd a categorical variable
-date_df['nederbörd_cat'] = date_df['nederbörd'].apply(lambda x: 'Regn' if x>5 else 'Lite Regn').astype('category').cat.as_ordered()
-
-#make temp a categorical variable depending on difference to the average temperature
-date_df['temperatur_cat'] = date_df.apply(lambda row: 'Som Vanligt' if row['Avg Temperature']-3< row['temperatur_avg'] and row['temperatur_avg'] < row['Avg Temperature']+3 else 'Kallare än vanligt' if row['temperatur_avg']<row['Avg Temperature']  else 'Varmare än vanligt', axis=1).astype('category').cat.as_ordered()
-
-
-#date_df['temperatur_cat'] = date_df['temperatur_avg'].apply(lambda x: 'Kallt' if x<14 else 'Varmt').astype('category').cat.as_ordered()
-
-#make TheDayName only three letters and a categorical variable
-date_df['TheDayName'] = date_df['TheDayName'].apply(lambda x: x[:3]).astype('category').cat.as_ordered()
-
-#make TheDay as a categorical variable with day 26-31 and 1-10 as the same category and the rest as the same category
-date_df['lön_cat'] = date_df['TheDay'].apply(lambda x: 'Nära Löning' if x<=10 or x>=26 else 'Långt Från Löning').astype('category').cat.as_ordered()
-
-# %%
-model_df = date_df[['TheWeek',"TheYear","lön_cat","TheDayName","nederbörd_cat","temperatur_cat","vindhastighet_cat","sikt_cat","högtid_cat"]]
-
-# %%
 #set path to pickle file
 path = current_path + "\\Other\\xg_reg.pickle.dat"
 
@@ -210,7 +162,7 @@ path = current_path + "\\Other\\xg_reg.pickle.dat"
 xg_reg = pickle.load(open(path, "rb"))
 
 #make prediction
-preds = xg_reg.predict(model_df)
+preds = xg_reg.predict(date_df[['TheWeek',"TheYear","IsWeekend","nederbörd","temperatur_avg","vindhastighet_avg","sikt_avg","days_to_holiday"]])
 
 #make df of predictions
 preds_df = pd.DataFrame(preds)
@@ -262,11 +214,5 @@ date_df.to_sql("stg_ML_Results", engine, if_exists='append') #, if_exists='appen
 query = 'EXEC Load_ML_Results'
 with engine.begin()as conn:
     result =  conn.execute(text(query))
-
-# %%
-
-
-# %%
-
 
 
