@@ -30,11 +30,15 @@ class DataProcessingAndModeling:
         self.data = None
         self.model = None
         self.model_parameters = {
-            'learning_rate': 0.1,
-            'max_depth': 4,
-            'n_estimators': 100,
+            'learning_rate': 0.01,
+            'max_depth': 3,
+            'n_estimators': 500,
             'subsample': 0.8,
-            'colsample_bytree': 0.8
+            'colsample_bytree': 0.8,
+            'min_child_weight': 1,
+            'gamma': 0.1,
+            'alpha': 0.001,
+            'lambda': 0.001
         }
 
     def get_training_data_from_database(self):
@@ -265,30 +269,55 @@ class DataProcessingAndModeling:
         print("R2: %f" % (r2))
 
     def get_best_model_param(self ,variable_list):
-        #split data into train and test
+        #split data into train and test as a xgboost Dmatrix
+
         X = self.data[variable_list]
         y = self.data['salesamount']
+
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=123)
+        
 
         # Assuming X_train and y_train are your training data
         param_grid = {
-            'learning_rate': [0.01, 0.1, 0.2],
+            'learning_rate': [0.01, 0.05, 0.1],
+            'n_estimators': [100, 200, 500],
             'max_depth': [3, 4, 5],
-            'n_estimators': [100, 200, 300],
+            'min_child_weight': [1, 3, 5],
             'subsample': [0.8, 0.9, 1.0],
-            'colsample_bytree': [0.8, 0.9, 1.0]
-        }
+            'colsample_bytree': [0.8, 0.9, 1.0],
+            'gamma': [0.0, 0.1, 0.2],
+            'alpha': [0.001, 0.01, 0.1],
+            'lambda': [0.001, 0.01, 0.1]
+            }           
+        
+        xgb_model = xgb.XGBRegressor(
+            objective='reg:squarederror',
+            enable_categorical=True,
+            tree_method='hist',  # Use GPU for histogram-based training
+            )
 
-
-        xgb_model = xgb.XGBRegressor(objective ='reg:squarederror', enable_categorical=True, tree_method='hist')
-
-        grid_search = GridSearchCV(estimator=xgb_model, param_grid=param_grid, scoring='neg_mean_squared_error', cv=5)
+      
+        # Grid search for best parameters
+        grid_search = GridSearchCV(estimator=xgb_model, param_grid=param_grid, scoring='neg_mean_squared_error', cv=3)
         grid_result = grid_search.fit(X_train, y_train)
 
         # Print the best parameters
         print("Best Parameters: ", grid_result.best_params_)
         self.model_parameters = grid_result.best_params_
 
+        # Print the scores for the whole grid
+        means = grid_result.cv_results_['mean_test_score']
+        stds = grid_result.cv_results_['std_test_score']
+        params = grid_result.cv_results_['params']
+
+        # Predict on the test set and calculate RMSE
+        y_pred = grid_result.predict(y_train)
+        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        print("RMSE: %f" % (rmse))
+
+        # Calculate R2
+        r2 = r2_score(y_test, y_pred)
+        print("R2: %f" % (r2))
 
     def save_model(self, save_path):
         #save model
@@ -302,6 +331,7 @@ class DataProcessingAndModeling:
         
     def plot_features(self,variable_list):
         #if salesamount exists in self.data set variable to salesamount, else set to predicted_salesamount
+        print("Feature importance: ")
         if 'salesamount' in self.data.columns:
             target = 'salesamount'
         else:
@@ -312,6 +342,7 @@ class DataProcessingAndModeling:
         plt.rcParams['figure.figsize'] = [5, 5]
         plt.show()
 
+        print("Each category v.s. salesamount: ")
         # Create individual strip plots for each feature against salesamount, do not show y axis, make each category a different color
         plt.figure(figsize=(20, 6))
         for feature in variable_list:
@@ -320,7 +351,7 @@ class DataProcessingAndModeling:
             plt.gca().axes.get_yaxis().set_visible(False)
             plt.xticks(fontsize=9)
         plt.tight_layout()
-        plt.suptitle('Distribution', fontsize=16)
+        plt.suptitle('category v.s. salesamount', fontsize=16)
         plt.show()
 
         #plot all features against the average sales amount per group of each category
@@ -331,7 +362,7 @@ class DataProcessingAndModeling:
             plt.gca().axes.get_yaxis().set_visible(False)
             plt.xticks(fontsize=9)
         plt.tight_layout()
-        plt.suptitle('Distribution', fontsize=16)
+        plt.suptitle('category v.s. salesamount', fontsize=16)
         plt.show()
 
         #plot number of values in each category, add title to the whole plot
